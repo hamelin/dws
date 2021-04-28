@@ -219,25 +219,6 @@ function version() {
 }
 
 
-# Ensure we have a dumb work space repository.
-# if [ ! -d "$DIR_DWS" ]; then
-#     mkdir -p "$DIR_DWS"
-#     if [ ! -d "$path_here" ]; then
-#         (
-#             hostname
-#             head -c 12 /dev/urandom | base64
-#         ) | tr '\n' ' ' >"$path_here"
-#     fi
-#     # if [ ! -d "$path_repo" ]; then
-#     #     mkdir -p "$path_repo"
-#     #     git init "$path_repo" 2>&1 >>
-#     #     touch "$path_repo/hosts"
-
-#     # fi
-#     # if [ ! -f "$path_repo/hosts" ]; then
-#     test -f "$path_logs" || touch "$path_logs"
-# fi
-
 # What do we do?
 if [ -z "$1" ]; then
     add_or_sync
