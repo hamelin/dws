@@ -257,8 +257,6 @@ else
         here)      here ;;
         ship)      ship ;;
         -h)        die_generic 0 ;;
-        --help)    die_generic 0 ;;
-        --version) echo $VERSION ;;
         -v)        echo $VERSION ;;
         *)
             echo "Unknown command: [$cmd]" 1>&2
