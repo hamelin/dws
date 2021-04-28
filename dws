@@ -69,6 +69,10 @@ function have_dir_dws() {
 }
 
 
+function Git() {
+    eval "git -C \"$dir_repo\" $@"
+}
+
 function have_repo_git() {
     dir_repo="$dir_dws/repo"
     if [ ! -d "$dir_repo/.git" ]; then
@@ -85,6 +89,28 @@ function have_repo_git() {
                 echo "Oh come on. Let's try again." 1>&2
             fi
         done
+    fi
+    while ! Git config user.name >/dev/null; do
+        read -ep "Input the name as which you would commit your work: "
+        Git config user.name "'$(echo "$REPLY" | xargs)'"
+    done
+    while ! Git config user.email >/dev/null; do
+        read -ep "Input the address which which you would commit your work: "
+        Git config user.email "'$(echo "$REPLY" | xargs)'"
+    done
+    if Git config commit.gpgsign | grep -q true && ! Git config user.signingKey; then
+        echo "I disable GPG signing of the mothership commits, since I'm not 100% sure which GPG key you would use to sign. You may re-enable it as you see fit, at your own convenience." 1>&2
+        Git config commit.gpgsign false
+    fi
+    if ! Git log -1 2>&1 >/dev/null; then
+        echo "The mothership repo is empty. I will add an empty commit." 1>&2
+        Git commit --allow-empty "--message=\"Root commit\"" 1>&2 || exit
+    fi
+    if Git branch --verbose | grep -qv '^\* main'; then
+        Git branch -M main || exit
+    fi
+    if Git branch --verbose | grep '^\* main' | grep -q '\[gone\]'; then
+        Git push --set-upstream origin main:main 1>&2
     fi
 }
 
