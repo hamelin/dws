@@ -214,11 +214,6 @@ USAGE
 }
 
 
-function version() {
-    echo $VERSION
-}
-
-
 # What do we do?
 if [ -z "$1" ]; then
     add_or_sync
@@ -240,8 +235,8 @@ else
         ship)      ship ;;
         -h)        die_generic 0 ;;
         --help)    die_generic 0 ;;
-        --version) version ;;
-        -v)        version ;;
+        --version) echo $VERSION ;;
+        -v)        echo $VERSION ;;
         *)
             echo "Unknown command: [$cmd]" 1>&2
             die_generic 1
