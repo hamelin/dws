@@ -1,0 +1,319 @@
+#!/bin/bash
+VERSION="1.0-beta"
+name_here="dws-here"
+
+
+function make_new_dir_dws() {
+    local dir="$HOME/.dws"
+    while [ -d "$dir" ]; do
+        dir=${dir}s
+    done
+    test -n "$1" && echo "$1" 1>&2
+    while true; do
+        read -ep "Where should we put the DWS work files? [$dir] "
+        if [ -n "$REPLY" ]; then
+            dir="$(realpath $REPLY)"
+        fi
+        dir=$(echo $dir | xargs)
+        if [ "$(echo $dir | head -c 1)" = '-' ]; then
+            echo "Looking for shenanigans, eh? Nuts to you."
+            exit 126
+        elif [ -d "$dir" ]; then
+            read -ep "Directory $dir already exists. It would be smarter to create a new directory. Use it nonetheless? [y/N] "
+            if echo "$REPLY" | xargs | head -c 1 | egrep -qi '^y'; then
+                echo "You're the boss!" 1>&2
+                break
+            fi
+        else
+            mkdir -p "$dir" && break
+            echo "Oops, problem creating that directory. Let's try this again." 1>&2
+        fi
+    done
+    echo "$dir"
+}
+
+
+function have_dir_dws() {
+    dir_dws=$(
+        local dirs=$(mktemp)
+        trap "rm -f -- $dirs" EXIT
+        find $HOME -name "$name_here" 2>/dev/null | xargs -n 1 dirname >"$dirs" 2>/dev/null
+        local dir=""
+        case $(wc -l <"$dirs") in
+            0)
+                make_new_dir_dws "Hello! It seems you have never used a Dumb Work Space on this machine before."
+                ;;
+            1) 
+                cat "$dirs"
+                ;;
+            *)
+                echo "You have multiple Dumb Work Space directories?! I can see all these:" 1>&2
+                awk '{printf("%6d %s\n", NR, $0)} (NR >= 20){print "      ... and yet more!"; exit 0}' "$dirs" 1>&2
+                echo "I leave it to you to clean up that mess. Right now, I can use any one of these." 1>&2
+                while true; do
+                    read -ep "Input the number of the DWS directory I should use now, leave empty to create a new one: "
+                    local answer="$(echo $REPLY | xargs | awk '{print $1}')"
+                    if [ -z "$answer" ]; then
+                        make_new_dir_dws "So we add a directory to your mess? You're the boss!"
+                        break
+                    else
+                        awk -v "n=$answer" \
+                            '(n == NR){print; exit 0}
+                             END{printf("Come on, I got no path for *%s*. Try again.\n", n) >"/dev/stderr"; exit 1}' \
+                            "$dirs" && break
+                    fi
+                done
+                ;;
+        esac
+    )
+}
+
+
+function Git() {
+    eval "git -C \"$dir_repo\" $@"
+}
+
+function have_repo_git() {
+    dir_repo="$dir_dws/repo"
+    if [ ! -d "$dir_repo/.git" ]; then
+        while true; do
+            read -ep "Enter the clone URL to the remote (e.g. Github) repository to use with DWS: "
+            local url=$(echo $REPLY | xargs)
+            if [ -n "$url" ]; then
+                if git clone "$url" "$dir_repo"; then
+                    echo "Repository $dir_repo is your mothership." 1>&2
+                    break
+                fi
+                echo "Cloning your Github repository failed. Let's try again." 1>&2
+            else
+                echo "Oh come on. Let's try again." 1>&2
+            fi
+        done
+    fi
+    while ! Git config user.name >/dev/null; do
+        read -ep "Input the name as which you would commit your work: "
+        Git config user.name "'$(echo "$REPLY" | xargs)'"
+    done
+    while ! Git config user.email >/dev/null; do
+        read -ep "Input the address which which you would commit your work: "
+        Git config user.email "'$(echo "$REPLY" | xargs)'"
+    done
+    if Git config commit.gpgsign | grep -q true && ! Git config user.signingKey; then
+        echo "I disable GPG signing of the mothership commits, since I'm not 100% sure which GPG key you would use to sign. You may re-enable it as you see fit, at your own convenience." 1>&2
+        Git config commit.gpgsign false
+    fi
+    if ! Git log -1 2>&1 >/dev/null; then
+        echo "The mothership repo is empty. I will add an empty commit." 1>&2
+        Git commit --allow-empty "--message=\"Root commit\"" 1>&2 || exit
+    fi
+    if Git branch --verbose | grep -qv '^\* main'; then
+        Git branch -M main || exit
+    fi
+    if Git branch --verbose | grep '^\* main' | grep -q '\[gone\]'; then
+        Git push --set-upstream origin main:main 1>&2
+    fi
+}
+
+
+function list_files() {
+    find "$dir_repo" | sed -Ee "s!$dir_repo/?!!" | awk '$0 && !/^.git\/?/'
+}
+
+
+function is_workstation_name_used() {
+    list_files | awk -F/ '{print $1}' | sort | uniq | grep -q "^$1$"
+}
+
+
+function identify_machine() {
+    path_here="$dir_dws/$name_here"
+    if [ -f "$path_here" ]; then
+        here="$(cat "$path_here")"
+    else
+        here="$(hostname -s)"
+        while true; do
+            read -ep "Input unique workstation name $(test -n "$here" && echo [$here]) "
+            local answer=$(echo $REPLY | xargs)
+            test -n "$answer" && here="$answer"
+            if [ -z "$here" ]; then
+                echo "Oh come on. Let's try this again." 1>&2
+            elif echo "$here" | egrep -qv '^[a-zA-Z][-_a-z0-9.]*$'; then
+                echo "Stick to names composed of letters, digits and dashes, and that starts with a letter. Let's try again." 1>&2
+            elif is_workstation_name_used "$here"; then
+                echo "The name [$here] is already used on another one of your workstations. Let's try again." 1>&2
+            else
+                echo "$here" >"$path_here"
+                break
+            fi
+        done
+    fi
+}
+
+
+function init() {
+    have_dir_dws
+    have_repo_git
+    identify_machine
+}
+
+
+function add_or_sync() {
+    if [ -f .dws ]; then
+        sync
+    else
+        add
+    fi
+}
+
+
+function list() {
+    echo "Don't know how to list!"
+    exit 42
+}
+
+
+function die_add() {
+    cat 1>&2 <<USAGE
+Usage: $0 add [nickname]
+       $0 -h
+
+Adds a work directory to the workspace under a chosen nickname. By default,
+the nickname corresponds to the directory's own name. $0 will help you choose
+a unique name. A work directory can be added only under a single nickname.
+
+After the work directory has been added to the workspace, it is synchronized
+for the first time.
+
+Options:
+
+    -h  Print out this help.
+USAGE
+    exit $1
+}
+
+
+function add() {
+    if [ -f ".dws" ]; then
+        echo "Directory already added as $(cat .dws) on this workstation."
+        exit 2
+    fi
+
+    init
+
+    while getopts 'h' arg; do
+        case "$arg" in
+            h) die_add 0 ;;
+            *) die_add 1 ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+
+    name_dir="$1"
+    test -z "$name_dir" && name_dir="$(basename "$(pwd)")"
+    while true; do
+        if [ -z "$name_dir" ]; then
+            echo "You can't use an empty string to nickname a work directory. Let's try again." 1>&2
+        elif echo "$name_dir" | egrep -qv '[a-zA-Z0-9_.][-a-zA-Z0-9_.]*'; then
+            echo "Nickname this work directory using only letters, numbers, dashes, underscores and periods. The nickname $name_dir does not work." 1>&2
+        elif is_name_dir_used "$name_dir"; then
+            echo "Work directory nickname $name_dir is already being used on this workstation. Let's try again." 1>&2
+        else
+            echo "$name_dir" >.dws
+            break
+        fi
+        read -ep "Input nickname: "
+        name_dir="$(echo "$REPLY" | xargs)"
+    done
+    sync
+}
+
+
+function clone() {
+    echo "Don't know how to clone!"
+    exit 42
+}
+
+
+function remove() {
+    echo "Don't know how to remove!"
+    exit 42
+}
+
+
+function sync() {
+    echo "Don't know how to sync!"
+    exit 42
+}
+
+
+function here() {
+    init
+    echo $here
+}
+
+
+function ship() {
+    init
+    echo $dir_repo
+}
+
+
+function die_generic() {
+    cat 1>&2 <<USAGE
+Usage: $0 command [OPTIONS] ARGS
+       $0 -h
+       $0 -v
+
+Description: dws is the Dumb Work Space. You use it to carry your work across
+the various workstations you have to use. Do this by defining _spaces_ on each
+workstation, which are directories recursively saved to the _mothership_. This
+is a Git repository that is kept in sync with the spaces on every workstation,
+possibly over Github.
+
+Commands:
+
+    list, ls     List the spaces, possibly on all workstations.
+    add          Add a new space.
+    clone        Clone a space from another workstation.
+    remove, rm   Remove a local space.
+    sync         Synchronize the current space with the mothership.
+    here         Report the name of this workstation as you set it up.
+    ship         Report the mothership directory, so you may fiddle with it
+                 and re-arrange its synchronization at your convenience.
+
+Without any command, dws tries to sync if the current directory was previously
+added. Otherwise, it adds the current directory.
+
+Requirement: having a remote Git repository (on Github, Gitlab, Sourcehut, or
+any SSH server you can access) that you can use as mothership.
+USAGE
+    exit $1
+}
+
+
+# What do we do?
+if [ -z "$1" ]; then
+    add_or_sync
+else
+    cmd="$1"
+    shift
+    case "$cmd" in
+        ls)        list ;;
+        list)      list ;;
+        add)       add ;;
+        clone)     clone ;;
+        rm)        remove ;;
+        remove)    remove ;;
+        del)       remove ;;
+        delete)    remove ;;
+        sync)      sync ;;
+        here)      here ;;
+        ship)      ship ;;
+        -h)        die_generic 0 ;;
+        -v)        echo $VERSION ;;
+        *)
+            echo "Unknown command: [$cmd]" 1>&2
+            die_generic 1
+            ;;
+    esac
+fi
