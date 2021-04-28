@@ -207,9 +207,9 @@ function ship() {
 
 function die_generic() {
     cat 1>&2 <<USAGE
-Usage: dws command [OPTIONS] ARGS
-       dws --help/-h
-       dws --version/-v
+Usage: $0 command [OPTIONS] ARGS
+       $0 -h
+       $0 -v
 
 Description: dws is the Dumb Work Space. You use it to carry your work across
 the various workstations you have to use. Do this by defining _spaces_ on each
