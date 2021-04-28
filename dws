@@ -209,6 +209,12 @@ Commands:
     here         Report the name of this workstation as you set it up.
     ship         Report the mothership directory, so you may fiddle with it
                  and re-arrange its synchronization at your convenience.
+
+Without any command, dws tries to sync if the current directory was previously
+added. Otherwise, it adds the current directory.
+
+Requirement: having a remote Git repository (on Github, Gitlab, Sourcehut, or
+any SSH server you can access) that you can use as mothership.
 USAGE
     exit $1
 }
