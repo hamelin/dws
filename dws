@@ -1,6 +1,6 @@
 #!/bin/bash
 VERSION="1.0-beta"
-name_here="dws_here"
+name_here="dws-here"
 
 
 function make_new_dir_dws() {
@@ -37,9 +37,9 @@ function have_dir_dws() {
     dir_dws=$(
         local dirs=$(mktemp)
         trap "rm -f -- $dirs" EXIT
-        find $HOME -name 'dws-here' 2>/dev/null | xargs -n 1 dirname >"$dirs"
+        find $HOME -name "$name_here" 2>/dev/null | xargs -n 1 dirname >"$dirs" 2>/dev/null
         local dir=""
-        case $(wc -l "$dirs") in
+        case $(wc -l <"$dirs") in
             0)
                 make_new_dir_dws "Hello! It seems you have never used a Dumb Work Space on this machine before."
                 ;;
@@ -48,7 +48,7 @@ function have_dir_dws() {
                 ;;
             *)
                 echo "You have multiple Dumb Work Space directories?! I can see all these:" 1>&2
-                awk '{printf("%06d %s\n", NR, $0)} (NR >= 20){print "      ... and yet more!"; exit 0}' "$dirs" 1>&2
+                awk '{printf("%6d %s\n", NR, $0)} (NR >= 20){print "      ... and yet more!"; exit 0}' "$dirs" 1>&2
                 echo "I leave it to you to clean up that mess. Right now, I can use any one of these." 1>&2
                 while true; do
                     read -ep "Input the number of the DWS directory I should use now, leave empty to create a new one: "
@@ -86,6 +86,11 @@ function have_repo_git() {
             fi
         done
     fi
+}
+
+
+function list_files() {
+    find "$dir_repo" | sed -Ee "s!$dir_repo/?!!" | awk '$0 && !/^.git\/?/'
 }
 
 
@@ -168,9 +173,9 @@ function track() {
 }
 
 
-function logs() {
-    echo "Don't know how to logs!"
-    exit 42
+function here() {
+    init
+    echo $here
 }
 
 
@@ -201,7 +206,7 @@ Commands:
     sync         Synchronize the current space with the mothership.
     track        Track the current space so its state is sent to the
                  mothership at regular time intervals.
-    logs         Report the log file path so you may consult it.
+    here         Report the name of this workstation as you set it up.
     ship         Report the mothership directory, so you may fiddle with it
                  and re-arrange its synchronization at your convenience.
 USAGE
@@ -250,7 +255,7 @@ else
         delete)    remove ;;
         sync)      sync ;;
         track)     track ;;
-        logs)      logs ;;
+        here)      here ;;
         ship)      ship ;;
         -h)        die_generic 0 ;;
         --help)    die_generic 0 ;;
