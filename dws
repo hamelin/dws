@@ -193,12 +193,6 @@ function sync() {
 }
 
 
-function track() {
-    echo "Don't know how to track!"
-    exit 42
-}
-
-
 function here() {
     init
     echo $here
@@ -230,8 +224,6 @@ Commands:
     clone        Clone a space from another workstation.
     remove, rm   Remove a local space.
     sync         Synchronize the current space with the mothership.
-    track        Track the current space so its state is sent to the
-                 mothership at regular time intervals.
     here         Report the name of this workstation as you set it up.
     ship         Report the mothership directory, so you may fiddle with it
                  and re-arrange its synchronization at your convenience.
@@ -262,7 +254,6 @@ else
         del)       remove ;;
         delete)    remove ;;
         sync)      sync ;;
-        track)     track ;;
         here)      here ;;
         ship)      ship ;;
         -h)        die_generic 0 ;;
