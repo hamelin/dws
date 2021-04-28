@@ -1,0 +1,258 @@
+#!/bin/bash
+name_here="dws_here"
+
+
+function make_new_dir_dws() {
+    local dir="$HOME/.dws"
+    while [ -d "$dir" ]; do
+        dir=${dir}s
+    done
+    test -n "$1" && echo "$1" 1>&2
+    while true; do
+        read -ep "Where should we put the DWS work files? [$dir] "
+        if [ -n "$REPLY" ]; then
+            dir="$(realpath $REPLY)"
+        fi
+        dir=$(echo $dir | xargs)
+        if [ "$(echo $dir | head -c 1)" = '-' ]; then
+            echo "Looking for shenanigans, eh? Nuts to you."
+            exit 126
+        elif [ -d "$dir" ]; then
+            read -ep "Directory $dir already exists. It would be smarter to create a new directory. Use it nonetheless? [y/N] "
+            if echo "$REPLY" | xargs | head -c 1 | egrep -qi '^y'; then
+                echo "You're the boss!" 1>&2
+                break
+            fi
+        else
+            mkdir -p "$dir" && break
+            echo "Oops, problem creating that directory. Let's try this again." 1>&2
+        fi
+    done
+    echo "$dir"
+}
+
+
+function have_dir_dws() {
+    dir_dws=$(
+        local dirs=$(mktemp)
+        trap "rm -f -- $dirs" EXIT
+        find $HOME -name 'dws-here' 2>/dev/null | xargs -n 1 dirname >"$dirs"
+        local dir=""
+        case $(wc -l "$dirs") in
+            0)
+                make_new_dir_dws "Hello! It seems you have never used a Dumb Work Space on this machine before."
+                ;;
+            1) 
+                cat "$dirs"
+                ;;
+            *)
+                echo "You have multiple Dumb Work Space directories?! I can see all these:" 1>&2
+                awk '{printf("%06d %s\n", NR, $0)} (NR >= 20){print "      ... and yet more!"; exit 0}' "$dirs" 1>&2
+                echo "I leave it to you to clean up that mess. Right now, I can use any one of these." 1>&2
+                while true; do
+                    read -ep "Input the number of the DWS directory I should use now, leave empty to create a new one: "
+                    local answer="$(echo $REPLY | xargs | awk '{print $1}')"
+                    if [ -z "$answer" ]; then
+                        make_new_dir_dws "So we add a directory to your mess? You're the boss!"
+                        break
+                    else
+                        awk -v "n=$answer" \
+                            '(n == NR){print; exit 0}
+                             END{printf("Come on, I got no path for *%s*. Try again.\n", n) >"/dev/stderr"; exit 1}' \
+                            "$dirs" && break
+                    fi
+                done
+                ;;
+        esac
+    )
+}
+
+
+function have_repo_git() {
+    dir_repo="$dir_dws/repo"
+    if [ ! -d "$dir_repo/.git" ]; then
+        while true; do
+            read -ep "Enter the clone URL to the remote (e.g. Github) repository to use with DWS: "
+            local url=$(echo $REPLY | xargs)
+            if [ -n "$url" ]; then
+                if git clone "$url" "$dir_repo"; then
+                    echo "Repository $dir_repo is your mothership." 1>&2
+                    break
+                fi
+                echo "Cloning your Github repository failed. Let's try again." 1>&2
+            else
+                echo "Oh come on. Let's try again." 1>&2
+            fi
+        done
+    fi
+}
+
+
+function is_workstation_name_used() {
+    list_files | awk -F/ '{print $1}' | sort | uniq | grep -q "^$1$"
+}
+
+
+function identify_machine() {
+    path_here="$dir_dws/$name_here"
+    if [ -f "$path_here" ]; then
+        here="$(cat "$path_here")"
+    else
+        here="$(hostname -s)"
+        while true; do
+            read -ep "Input unique workstation name $(test -n "$here" && echo [$here]) "
+            local answer=$(echo $REPLY | xargs)
+            test -n "$answer" && here="$answer"
+            if [ -z "$here" ]; then
+                echo "Oh come on. Let's try this again." 1>&2
+            elif echo "$here" | egrep -qv '^[a-zA-Z][-_a-z0-9.]*$'; then
+                echo "Stick to names composed of letters, digits and dashes, and that starts with a letter. Let's try again." 1>&2
+            elif is_workstation_name_used "$here"; then
+                echo "The name [$here] is already used on another one of your workstations. Let's try again." 1>&2
+            else
+                echo "$here" >"$path_here"
+                break
+            fi
+        done
+    fi
+}
+
+
+function init() {
+    have_dir_dws
+    have_repo_git
+    identify_machine
+}
+
+
+function add_or_sync() {
+    echo "Don't know how to do nothing!"
+    exit 42
+}
+
+
+function list() {
+    echo "Don't know how to list!"
+    exit 42
+}
+
+
+function add() {
+    echo "Don't know how to add!"
+    exit 42
+}
+
+
+function clone() {
+    echo "Don't know how to clone!"
+    exit 42
+}
+
+
+function remove() {
+    echo "Don't know how to remove!"
+    exit 42
+}
+
+
+function sync() {
+    echo "Don't know how to sync!"
+    exit 42
+}
+
+
+function track() {
+    echo "Don't know how to track!"
+    exit 42
+}
+
+
+function logs() {
+    echo "Don't know how to logs!"
+    exit 42
+}
+
+
+function ship() {
+    echo "Don't know how to ship!"
+    exit 42
+}
+
+
+function die_generic() {
+    cat 1>&2 <<USAGE
+Usage: dws command [OPTIONS] ARGS
+       dws --help/-h
+       dws --version/-v
+
+Description: dws is the Dumb Work Space. You use it to carry your work across
+the various workstations you have to use. Do this by defining _spaces_ on each
+workstation, which are directories recursively saved to the _mothership_. This
+is a Git repository that is kept in sync with the spaces on every workstation,
+possibly over Github.
+
+Commands:
+
+    list, ls     List the spaces, possibly on all workstations.
+    add          Add a new space.
+    clone        Clone a space from another workstation.
+    remove, rm   Remove a local space.
+    sync         Synchronize the current space with the mothership.
+    track        Track the current space so its state is sent to the
+                 mothership at regular time intervals.
+    logs         Report the log file path so you may consult it.
+    ship         Report the mothership directory, so you may fiddle with it
+                 and re-arrange its synchronization at your convenience.
+USAGE
+    exit $1
+}
+
+
+# Ensure we have a dumb work space repository.
+if [ ! -d "$DIR_DWS" ]; then
+    mkdir -p "$DIR_DWS"
+    if [ ! -d "$path_here" ]; then
+        (
+            hostname
+            head -c 12 /dev/urandom | base64
+        ) | tr '\n' ' ' >"$path_here"
+    fi
+    # if [ ! -d "$path_repo" ]; then
+    #     mkdir -p "$path_repo"
+    #     git init "$path_repo" 2>&1 >>
+    #     touch "$path_repo/hosts"
+
+    # fi
+    # if [ ! -f "$path_repo/hosts" ]; then
+    test -f "$path_logs" || touch "$path_logs"
+fi
+
+# What do we do?
+if [ -z "$1" ]; then
+    add_or_sync
+else
+    cmd="$1"
+    shift
+    case "$cmd" in
+        ls)        list ;;
+        list)      list ;;
+        add)       add ;;
+        clone)     clone ;;
+        rm)        remove ;;
+        remove)    remove ;;
+        del)       remove ;;
+        delete)    remove ;;
+        sync)      sync ;;
+        track)     track ;;
+        logs)      logs ;;
+        ship)      ship ;;
+        -h)        die_generic 0 ;;
+        --help)    die_generic 0 ;;
+        --version) version ;;
+        -v)        version ;;
+        *)
+            echo "Unknown command: [$cmd]" 1>&2
+            die_generic 1
+            ;;
+    esac
+fi
