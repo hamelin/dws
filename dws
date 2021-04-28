@@ -180,8 +180,8 @@ function here() {
 
 
 function ship() {
-    echo "Don't know how to ship!"
-    exit 42
+    init
+    echo $dir_repo
 }
 
 
