@@ -137,8 +137,8 @@ function init() {
 
 
 function list() {
-    echo "Don't know how to list!"
-    exit 42
+    init
+    list_files
 }
 
 
