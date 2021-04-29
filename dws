@@ -89,7 +89,7 @@ function have_repo_git() {
         Git branch -M main || exit
     fi
     if Git branch --verbose | grep '^\* main' | grep -q '\[gone\]'; then
-        Git push --set-upstream origin main:main 1>&2
+        Git push --set-upstream origin main 1>&2
     fi
 }
 
@@ -152,15 +152,15 @@ function choose_nickname() {
         local nickname_from_beacon="$(cat "$file_beacon")"
         if [ -n "$nickname" ]; then
             cat 1>&2 <<NICKNAME
-You propose using space nickname [$nickname] (1), but this space has previously
-been synchronized under the nickname [$nickname_from_beacon] (2).
+You propose using space nickname [$nickname], but this space has previously
+been synchronized under the nickname [$nickname_from_beacon].
 NICKNAME
             read -ep "Should I replace $nickname_from_beacon with $nickname? [yN] "
             if echo "$REPLY" | xargs | egrep -qi '^y'; then
                 cat 1>&2 <<RENAME
 Ok, this space is now renamed $nickname. Remark that the parentship will still
 store the files sent there so far under nickname $nickname_from_beacon in
-addition to new ones. Use command $0 rm to get rid of those.
+addition to new ones. Use command $dws rm to get rid of those.
 RENAME
             else
                 echo "No worries, we keep this space named $nickname_from_beacon." 1>&2
@@ -240,8 +240,8 @@ USAGE
 
 function sync() {
     local allow_empty_commit=""
-    local message_commit="Sync $nickname"
     local do_edit=""
+    local message_commit=""
     while getopts "hm:e" arg; do
         case "$arg" in
             e)  local do_edit="--edit"
@@ -257,23 +257,27 @@ function sync() {
     shift $((OPTIND - 1))
     test "$1" = "--" && shift
     nickname="$1"
+    test -z "$message_commit" && local message_commit="Sync $nickname"
 
     init
 
     choose_nickname
     local branch_sync="sync_$nickname"
-    pause
 
     while true; do
-        Git checkout main 1>&2 && Git pull 1>&2 || exit
-        if git branch | grep -qv "^$branch_sync$"; then
+        Git checkout main 1>&2 && Git pull origin main 1>&2 || exit
+        if Git branch | grep -qv "^$branch_sync$"; then
             Git checkout -b "$branch_sync" 1>&2 || exit
             trap "Git checkout --force main 1>&2 && Git branch --delete --force \"$branch_sync\" 1>&2" EXIT
             local dir_work="$dir_repo/$here/$nickname"
-            rm -rf "$dir_work" && cp -R . "$dir_work" || exit
+            rm -rf "$dir_work" \
+                && mkdir -p "$(dirname "$dir_work")" \
+                && cp -R . "$dir_work" \
+                && rm -f "$dir_work/$file_beacon" \
+                || exit
             local x=0
-            if [ -n "$(git status --short)" -o -n "$allow_empty_commit" ]; then
-                Git add --all 1>&2 && Git commit "--message=\"$message\"" $do_edit $allow_empty_commit 1>&2
+            if [ -n "$(Git status --short)" -o -n "$allow_empty_commit" ]; then
+                Git add --all 1>&2 && Git commit "--message=\"$message_commit\"" $do_edit $allow_empty_commit 1>&2
                 local x=$?
             else
                 echo "This work directory is already up to date at the parentship." 1>&2
@@ -285,7 +289,7 @@ function sync() {
 
         (
             Git checkout -b to_push 1>&2 || exit
-            trap "Git checkout --force main && Git branch --delete --force to_push" EXIT
+            trap "Git checkout --force main && Git merge to_push ; Git branch --delete --force to_push" EXIT
             Git merge "$branch_sync" 1>&2 || exit
             Git push --porcelain origin to_push:main 2>&1 \
                 | awk -F'\t' '!/^remote:/{print > "/dev/stderr"}
@@ -355,16 +359,16 @@ if echo "$1" | egrep -q '^([a-z]|-[hv])' ; then
     cmd="$1"
     shift
     case "$cmd" in
-        ls)        list $@ ;;
-        list)      list $@ ;;
-        clone)     clone $@ ;;
-        rm)        remove $@ ;;
-        remove)    remove $@ ;;
-        del)       remove $@ ;;
-        delete)    remove $@ ;;
-        sync)      sync $@ ;;
-        here)      here $@ ;;
-        ship)      ship $@ ;;
+        ls)        list "${@}" ;;
+        list)      list "${@}" ;;
+        clone)     clone "${@}" ;;
+        rm)        remove "${@}" ;;
+        remove)    remove "${@}" ;;
+        del)       remove "${@}" ;;
+        delete)    remove "${@}" ;;
+        sync)      sync "${@}" ;;
+        here)      here "${@}" ;;
+        ship)      ship "${@}" ;;
         -h)        die_generic 0 ;;
         -v)        echo $VERSION ;;
         *)
@@ -373,5 +377,5 @@ if echo "$1" | egrep -q '^([a-z]|-[hv])' ; then
             ;;
     esac
 else
-    sync $@
+    sync "${@}"
 fi
