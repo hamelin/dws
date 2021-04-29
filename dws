@@ -95,7 +95,7 @@ function have_repo_git() {
 
 
 function list_files() {
-    find "$dir_repo" | sed -Ee "s!$dir_repo/?!!" | awk '$0 && !/^.git\/?/'
+    find "$dir_repo" -type f | sed -Ee "s!$dir_repo/?!!" | awk '$0 && !/^.git\/?/'
 }
 
 
@@ -138,10 +138,10 @@ function init() {
 
 function die_list() {
     cat 1>&2 <<USAGE
-Usage: $dws list [-n]
+Usage: $dws list [-n] [regular expression]
        $dws list -h
 
-Description: list all files stored in your Dumb Work Space. Each file comes as
+Description: list files stored in your Dumb Work Space. Each file comes as
 a path-like entry, starting with the workstation name, followed by the space
 name, and then the file itself. As all files are stored locally, they can be
 stat'ed, looked up and otherwise manipulated. Any serious work, however, is
@@ -150,8 +150,11 @@ command $dws clone.
 
 Options:
 
-    -n  Skip updating the parentship from the remote repository.
-    -h  Print out this help and exit.
+    -n                  Skip updating the parentship from the remote repo.
+    -h                  Print out this help and exit.
+    regular expression  Restrict listing to files that match this regular
+                        expression. Matches must compute from the beginning
+                        of the expression. By default, no restriction.
 USAGE
     exit $1
 }
@@ -172,10 +175,12 @@ function list() {
         esac
     done
     shift $((OPTIND - 1))
+    local regexp="$(echo $1 | xargs)"
+    test -z "$regexp" && local regexp='.'
 
     init
     test -z "$skip_updates" && update_parentship
-    list_files
+    list_files | grep "^$regexp"
 }
 
 
