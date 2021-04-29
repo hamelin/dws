@@ -303,9 +303,58 @@ function clone() {
 }
 
 
-function remove() {
-    echo "Don't know how to remove!"
-    exit 42
+function die_forget() {
+    cat 1>&2 <<USAGE
+Usage: $dws forget [-e] [-m MESSAGE]
+       $dws forget -h
+
+Given the space the shell is in, removes its files from the parentship, and
+unlinks the nickname associated to the space. The files in the directory are
+not otherwise modified, altered or deleted. The history of the files remain
+in the parentship directory, but are removed from its HEAD tree and index.
+This removal corresponds to a commit on the parentship. The default commit
+message can be edited or specified through options.
+
+Options:
+
+    -e         Edits the commit message associated to the space removal.
+    -m MESSAGE Specifies the commit message on the command line.
+    -h         Print out this help and exit.
+USAGE
+    exit $1
+}
+
+
+function forget() {
+    if [ ! -f "$file_beacon" ]; then
+        echo "This directory is not a space, so it cannot be forgotten." 1>&2
+        exit 30
+    fi
+
+    local do_edit=""
+    local message_commit=""
+    while getopts "hm:e" arg; do
+        case "$arg" in
+            e)  local do_edit="-e" ;;
+            m)  local message_commit="$OPTARG" ;;
+            h)  die_sync 0 ;;
+            *)  die_sync 1 ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+
+    init
+    test -z "$message_commit" && local message_commit="Forget $here/$(cat "$file_beacon")"
+
+    local dir_empty="$(mktemp --directory)"
+    trap "rm -rf $dir_empty" EXIT
+    cp "$file_beacon" "$dir_empty" || exit
+    (
+        cd "$dir_empty"
+        forgetting="yes"
+        sync -m "$message_commit" $do_edit
+    ) || exit
+    rm "$file_beacon" || exit
 }
 
 
@@ -345,7 +394,8 @@ function sync() {
     local allow_empty_commit=""
     local do_edit=""
     local message_commit=""
-    while getopts "hm:e" arg; do
+    OPTIND=1
+    while getopts "hm:e" arg ; do
         case "$arg" in
             e)  local do_edit="--edit"
                 local allow_empty_commit="--allow-empty"
@@ -359,8 +409,7 @@ function sync() {
     done
     shift $((OPTIND - 1))
     test "$1" = "--" && shift
-    nickname="$1"
-    test -z "$message_commit" && local message_commit="Sync $nickname"
+    nickname=$(echo "$1" | xargs)
 
     init
 
@@ -411,8 +460,14 @@ LARGE
         fi
     fi
 
+    if [ -z "$forgetting" -a -z "$(ls --all | egrep -v "^(\\.{1,2}|\\.git|$file_beacon)\$")" ]; then
+        echo "Cannot sync a directory that has nothing in it besides .git artifacts or a DWS beacon file." 1>&2
+        exit 20
+    fi
+
     choose_nickname
     local branch_sync="sync_$nickname"
+    test -z "$message_commit" && local message_commit="Sync $here/$nickname"
 
     while true; do
         update_parentship
@@ -420,11 +475,13 @@ LARGE
             Git checkout -b "$branch_sync" 1>&2 || exit
             trap "Git checkout --force main 1>&2 && Git branch --delete --force \"$branch_sync\" 1>&2" EXIT
             local dir_work="$dir_repo/$here/$nickname"
-            rm -rf "$dir_work" \
-                && mkdir -p "$(dirname "$dir_work")" \
-                && cp -R . "$dir_work" \
-                && rm -f "$dir_work/$file_beacon" \
-                || exit
+            rm -rf "$dir_work" || exit
+            if [ -z "$forgetting" ]; then
+                mkdir -p "$(dirname "$dir_work")" \
+                    && cp -R . "$dir_work" \
+                    && rm -f "$dir_work/$file_beacon" \
+                    || exit
+            fi
             local x=0
             if [ -n "$(Git status --short)" -o -n "$allow_empty_commit" ]; then
                 Git add --all 1>&2 && Git commit "--message=\"$message_commit\"" $do_edit $allow_empty_commit 1>&2
@@ -490,7 +547,8 @@ Commands:
     sync         Synchronize the current space with the parentship.
     list, ls     List all files present on the parentship.
     clone        Clone a space from another workstation.
-    remove, rm   Remove a local work directory.
+    forget       Close the link between the current space and the parentship,
+                 so that it becomes a mere directory again.
     here         Report the name of this workstation as you set it up.
     ship         Report the parentship directory, so you may fiddle with it
                  and re-arrange its synchronization at your convenience.
@@ -512,10 +570,7 @@ if echo "$1" | egrep -q '^([a-z]|-[hv])' ; then
         ls)        list "${@}" ;;
         list)      list "${@}" ;;
         clone)     clone "${@}" ;;
-        rm)        remove "${@}" ;;
-        remove)    remove "${@}" ;;
-        del)       remove "${@}" ;;
-        delete)    remove "${@}" ;;
+        forget)    forget "${@}" ;;
         sync)      sync "${@}" ;;
         here)      here "${@}" ;;
         ship)      ship "${@}" ;;
