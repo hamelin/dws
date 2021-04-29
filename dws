@@ -21,7 +21,7 @@ function make_new_dir_dws() {
     while true; do
         read -ep "Where should we put the DWS work files? [$dir_dws] "
         if [ -n "$REPLY" ]; then
-            dir_dws="$(realpath $REPLY | xargs)"
+            dir_dws="$(realpath $(eval "echo $REPLY"))"
         fi
         if [ "$(echo $dir_dws | head -c 1)" = '-' ]; then
             echo "Looking for shenanigans, eh? Nuts to you."
