@@ -5,7 +5,7 @@ file_beacon=".dws-beacon"
 
 
 function make_new_dir_dws() {
-    dir_dws="$HOME/.dws-workspace"
+    dir_dws="$HOME/.dws-home"
     while [ -d "$dir_dws" ]; do
         dir_dws="${dir_dws}e"
     done
@@ -45,14 +45,14 @@ function Git() {
 }
 
 function have_repo_git() {
-    dir_repo="$dir_dws/repo"
+    dir_repo="$dir_dws/parentship"
     if [ ! -d "$dir_repo/.git" ]; then
         while true; do
             read -ep "Enter the clone URL to the remote (e.g. Github) repository to use with DWS: "
             local url=$(echo $REPLY | xargs)
             if [ -n "$url" ]; then
                 if git clone "$url" "$dir_repo"; then
-                    echo "Repository $dir_repo is your mothership." 1>&2
+                    echo "Repository $dir_repo is your parentship." 1>&2
                     break
                 fi
                 echo "Cloning your Github repository failed. Let's try again." 1>&2
@@ -70,11 +70,11 @@ function have_repo_git() {
         Git config user.email "'$(echo "$REPLY" | xargs)'"
     done
     if Git config commit.gpgsign | grep -q true && ! Git config user.signingKey; then
-        echo "I disable GPG signing of the mothership commits, since I'm not 100% sure which GPG key you would use to sign. You may re-enable it as you see fit, at your own convenience." 1>&2
+        echo "I disable GPG signing of the parentship commits, since I'm not 100% sure which GPG key you would use to sign. You may re-enable it as you see fit, at your own convenience." 1>&2
         Git config commit.gpgsign false
     fi
     if ! Git log -1 2>&1 >/dev/null; then
-        echo "The mothership repo is empty. I will add an empty commit." 1>&2
+        echo "The parentship repo is empty. I will add an empty commit." 1>&2
         Git commit --allow-empty "--message=\"Root commit\"" 1>&2 || exit
     fi
     if Git branch --verbose | grep -qv '^\* main'; then
@@ -216,14 +216,14 @@ function die_sync() {
 Usage: $0 sync [-e] [-m MESSAGE]
        $0 -h
 
-Synchronizes the current work directory to the mothership. This is done by
-copying the files to the local repository, committing that to an ad hoc
-branch, then merging and pushing that on the mothership's main branch. By
-default, a boilerplate commit message is associated to the files. You can
-edit this commit message, or change it through the command line. In the
-latter two cases, the commit is completed and pushed even if the files of
-this work directory match exactly those at the mothership: if one insists
-on committing, $0 is not going to oppose.
+Synchronizes the current space to the parentship. This is done by copying the
+files to the local repository, committing that to an ad hoc branch, then
+merging and pushing that on the parentship's main branch. By default, a
+boilerplate commit message is associated to the files. You can edit this commit
+message, or change it through the command line. In the latter two cases, the
+commit is completed and pushed even if the files of this work directory match
+exactly those at the parentship: if one insists on committing, $0 is not going
+to oppose.
 
 Options:
 
@@ -275,7 +275,7 @@ function sync() {
                 Git add --all 1>&2 && Git commit "--message=\"$message\"" $do_edit $allow_empty_commit 1>&2
                 local x=$?
             else
-                echo "This work directory is already up to date at the mothership." 1>&2
+                echo "This work directory is already up to date at the parentship." 1>&2
                 break
             fi
             Git checkout --force main 1>&2
@@ -295,7 +295,7 @@ function sync() {
         if [ "$x" = "123" ]; then
             cat 1>&2 <<UPLOAD
 The upload of the $nickname work directory failed. This may be because the
-mothership's main branch has been modified while preparing this update.
+parentship's main branch has been modified while preparing this update.
 I will wait a few seconds and try again.
 UPLOAD
             sleep 5
