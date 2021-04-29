@@ -524,8 +524,33 @@ UPLOAD
 
 
 function path() {
-    echo "Don't know how to path!" 1>&2
-    exit 42
+    while getopts "h" arg; do
+        case "$arg" in
+            h)  die_path 0 ;;
+            *)  die_path 1 ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    local path="$(echo "$1" | xargs)"
+
+    if [ -z "$path" ]; then
+        echo "Give a path to get a path. Most people find this easy." 1>&2
+        exit 40
+    fi
+
+    init
+    if [ ! -f "$file_beacon" ]; then
+        echo "This directory is not a space, so I can't report on the parentship location of its files." 1>&2
+        exit 41
+    fi
+    local space="$(cat "$file_beacon")"
+    local path_parentship="$dir_repo/$here/$space/$path"
+    if [ -e "$path_parentship" ]; then
+        echo "$path_parentship"
+    else
+        echo "Parentship does not host $path for space $space yet." 1>&2
+        exit 43
+    fi
 }
 
 
@@ -602,6 +627,7 @@ Commands:
     clone        Clone a space from another workstation.
     forget       Close the link between the current space and the parentship,
                  so that it becomes a mere directory again.
+    path, p      Prints the full path of a space's file in the parentship.
     here         Report the name of this workstation as you set it up.
     ship         Report the parentship directory, so you may fiddle with it
                  and re-arrange its synchronization at your convenience.
@@ -625,6 +651,8 @@ if echo "$1" | egrep -q '^([a-z]|-[hv])' ; then
         clone)     clone "${@}" ;;
         forget)    forget "${@}" ;;
         sync)      sync "${@}" ;;
+        path)      path "${@}" ;;
+        p)         path "${@}" ;;
         here)      here "${@}" ;;
         ship)      ship "${@}" ;;
         -h)        die_generic 0 ;;
