@@ -261,6 +261,29 @@ function sync() {
 
     init
 
+    if [ "$(pwd)" = "$HOME" ]; then
+        cat 1>&2 <<AREYOUSURE
+You are proposing here to turn your whole home directory into a space and
+synchronize it over multiple workstations using a remote Git repository.
+One's home directory often contains secrets, such as private cryptographic
+keys, sensitive documents, personal information, and so on. If your parentship
+is hosted on a public service such as Github, Gitlab, Bitbucket, Sourcehut,
+etc., you may end up putting this highly sensitive data where it can be
+observed by others (if your parentship is a public repository) or stolen
+through cyberattacks against the service. Moreover, if you go ahead and do it,
+undoing this may be complicated, and you might have no possibility to strictly
+ensure your data is effectively scrubbed off the service.
+
+AREYOUSURE
+        read -ep "Are you sure you want to proceed? [yN] "
+        if echo "$REPLY" | xargs | grep -qi '^y'; then
+            echo "Alright, you're the boss!" 1>&2
+        else
+            echo "In my humble opinion, you made a wise choice." 1>&2
+            exit 0
+        fi
+    fi
+
     choose_nickname
     local branch_sync="sync_$nickname"
 
