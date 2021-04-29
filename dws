@@ -523,13 +523,61 @@ UPLOAD
 }
 
 
+function path() {
+    echo "Don't know how to path!" 1>&2
+    exit 42
+}
+
+
+function die_here() {
+    cat 1>&2 <<USAGE
+Usage: $dws here [-h]
+
+Description: print the name of this workstation as you set it up.
+
+Options:
+    -h  Print out this help and exit.
+USAGE
+    exit $1
+}
+
+
 function here() {
+    while getopts "h" arg; do
+        case "$arg" in
+            h)  die_here 0 ;;
+            *)  die_here 1 ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+
     init
     echo $here
 }
 
 
+function die_ship() {
+    cat 1>&2 <<USAGE
+Usage: $dws ship [-h]
+
+Description: print the full path to the parentship.
+
+Options:
+    -h  Print out this help and exit.
+USAGE
+    exit $1
+}
+
+
 function ship() {
+    while getopts "h" arg; do
+        case "$arg" in
+            h)  die_ship 0 ;;
+            *)  die_ship 1 ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+
     init
     echo $dir_repo
 }
