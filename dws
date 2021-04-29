@@ -129,7 +129,7 @@ function init() {
 
 
 function add_or_sync() {
-    if [ -f .dws ]; then
+    if [ -f "$file_beacon" ]; then
         sync
     else
         add
@@ -164,8 +164,8 @@ USAGE
 
 
 function add() {
-    if [ -f ".dws" ]; then
-        echo "Directory already added as $(cat .dws) on this workstation."
+    if [ -f "$file_beacon" ]; then
+        echo "Directory already added as $(cat "$file_beacon") on this workstation."
         exit 2
     fi
 
@@ -189,7 +189,7 @@ function add() {
         elif is_name_dir_used "$name_dir"; then
             echo "Work directory nickname $name_dir is already being used on this workstation. Let's try again." 1>&2
         else
-            echo "$name_dir" >.dws
+            echo "$name_dir" >"$file_beacon"
             break
         fi
         read -ep "Input nickname: "
@@ -239,11 +239,11 @@ USAGE
 
 
 function sync() {
-    if [ ! -f ".dws" ]; then
+    if [ ! -f "$file_beacon" ]; then
         echo "This work directory is not identified for storage in the mothership. Run $0 add first."
         exit 3
     fi
-    local nickname="$(cat .dws)" || exit
+    local nickname="$(cat "$file_beacon")" || exit
     local branch_sync="sync_$nickname"
 
     local allow_empty_commit=""
