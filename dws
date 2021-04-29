@@ -284,6 +284,30 @@ AREYOUSURE
         fi
     fi
 
+    if [ ! -f "$file_beacon" ]; then
+        local size_space=$(du -m --summarize | awk 'BEGIN{s=0} {s += $1} END{print s}')
+        if [ "$size_space" -gt 10 ]; then
+            for unit in MB GB TB PB infinibytes; do
+                test "$size_space" -le 1024 && break
+                local size_space=$((size_space >> 10))
+            done
+            cat 1>&2 <<LARGE
+This directory contains a large volume of data, about $size_space $unit. Large files,
+especially binary files, are not handled efficiently by Git. Synchronizing
+this space may thus be cumbersome, and you might hit storage restrictions from
+the hosting service associated to your parentship.
+
+LARGE
+            read -ep "Proceed nonetheless? [Yn] "
+            if echo "$REPLY" | xargs | grep -qi '^n'; then
+                echo "Let's drop this then." 1>&2
+                exit 0
+            else
+                echo "You're the boss!" 1>&2
+            fi
+        fi
+    fi
+
     choose_nickname
     local branch_sync="sync_$nickname"
 
