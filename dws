@@ -1,5 +1,6 @@
 #!/bin/bash
 VERSION="1.0-beta"
+dws="$(basename "$0")"
 name_here="dws-here"
 file_beacon=".dws-beacon"
 
@@ -207,8 +208,8 @@ function remove() {
 
 function die_sync() {
     cat 1>&2 <<USAGE
-Usage: $0 sync [-e] [-m MESSAGE] [--] [nickname]
-       $0 -h
+Usage: $dws sync [-e] [-m MESSAGE] [--] [nickname]
+       $dws -h
 
 Synchronizes the current space to the parentship. This is done by copying the
 files to the local repository, committing that to an ad hoc branch, then
@@ -216,7 +217,7 @@ merging and pushing that on the parentship's main branch. By default, a
 boilerplate commit message is associated to the files. You can edit this commit
 message, or change it through the command line. In the latter two cases, the
 commit is completed and pushed even if the files of this work directory match
-exactly those at the parentship: if one insists on committing, $0 is not going
+exactly those at the parentship: if one insists on committing, $dws is not going
 to oppose.
 
 Options:
@@ -226,7 +227,7 @@ Options:
     -h         Print out this help.
     nickname   By default, a space's nickname is the name of the directory.
                You may, however, choose a different nickname if you prefer.
-               If $0 is invoked without command, you may specify the nickname
+               If $dws is invoked without command, you may specify the nickname
                by separating it from other arguments with --. Remark that no
                option can appear beyond the nickname or --.
 
@@ -320,9 +321,9 @@ function ship() {
 
 function die_generic() {
     cat 1>&2 <<USAGE
-Usage: $0 command [OPTIONS] ARGS
-       $0 -h
-       $0 -v
+Usage: $dws command [OPTIONS] ARGS
+       $dws -h
+       $dws -v
 
 Description: dws is the Dumb Work Space. You use it to carry your work across
 the various workstations you have to use. Do this by defining _spaces_ on each
