@@ -171,6 +171,7 @@ function list() {
             *)  die_list 1 ;;
         esac
     done
+    shift $((OPTIND - 1))
 
     init
     test -z "$skip_updates" && update_parentship
@@ -232,16 +233,73 @@ RENAME
 
 function die_clone() {
     cat 1>&2 <<USAGE
-Usage: $dws clone workstation/space [directory]
-       $dws
+Usage: $dws clone [-n] workstation/space [directory]
+       $dws clone -h
+
+Description: clone a space from another workstation to a new local directory.
+By default, the new directory is named as the space; another name can be
+given. This new directory must not exist, otherwise the operation fails.
+Remark that the directory thereby created does not become immediately a space
+on the current workstation. For that, use command $dws sync while standing in
+this directory.
+
+Arguments:
+
+    workstation/space  Workstation and space to clone.
+    directory          Local directory to create and clone in. By default,
+                       we use the space name.
+
+Options:
+
+    -n  Skip updating the parentship from the remote repository prior to
+        run the cloning.
+    -h  Print out this help and exit.
 USAGE
     exit $1
 }
 
 
 function clone() {
-    echo "Don't know how to clone!"
-    exit 42
+    local skip_update=""
+    while getopts "hn" arg; do
+        case "$arg" in
+            n)  local skip_updates="yes" ;;
+            h)  die_clone 0 ;;
+            *)  die_clone 1 ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    local space_to_clone="$1"
+    if [ -z "$space_to_clone" ]; then
+        echo "You did not specify a space to clone. Abort." 1>&2
+        exit 12
+    elif echo "$space_to_clone" | xargs | egrep -v '[A-Za-z][-_.A-Za-z0-9]*(/[a-zA-Z][-_.a-zA-Z0-9]*)+'; then
+        echo "The workstation/space is ill-typed, or includes illegal characters. Abort." 1>&2
+        exit 13
+    fi
+    local dir_target="$2"
+    test -z "$dir_target" && local dir_target="$(basename "$space_to_clone")"
+    test -z "$dir_target" && exit 120
+    if [ -d "$dir_target" ]; then
+        echo "Target directory $dir_target already exists. Abort." 1>&2
+        exit 14
+    fi
+
+    init
+    test -z "$skip_updates" && update_parentship
+
+    local dir_source="$dir_repo/$space_to_clone"
+    if [ ! -d "$dir_source" ]; then
+        echo "Unable to find space $space_to_clone on the mothership. Abort." 1>&2
+        exit 15
+    fi
+    mkdir -p "$(dirname "$dir_target")" || exit
+    if ! cp -R "$dir_source" "$dir_target"; then
+        x=$?
+        echo "Problem while cloning the space. We destroy the target directory and abort." 1>&2
+        rm -rf "$dir_target"
+        exit $?
+    fi
 }
 
 
