@@ -1,71 +1,42 @@
 #!/bin/bash
 VERSION="1.0-beta"
 name_here="dws-here"
+file_beacon=".dws-beacon"
 
 
 function make_new_dir_dws() {
-    local dir="$HOME/.dws"
-    while [ -d "$dir" ]; do
-        dir=${dir}s
+    dir_dws="$HOME/.dws-workspace"
+    while [ -d "$dir_dws" ]; do
+        dir_dws="${dir_dws}e"
     done
     test -n "$1" && echo "$1" 1>&2
     while true; do
-        read -ep "Where should we put the DWS work files? [$dir] "
+        read -ep "Where should we put the DWS work files? [$dir_dws] "
         if [ -n "$REPLY" ]; then
-            dir="$(realpath $REPLY)"
+            dir_dws="$(realpath $REPLY | xargs)"
         fi
-        dir=$(echo $dir | xargs)
-        if [ "$(echo $dir | head -c 1)" = '-' ]; then
+        if [ "$(echo $dir_dws | head -c 1)" = '-' ]; then
             echo "Looking for shenanigans, eh? Nuts to you."
-            exit 126
-        elif [ -d "$dir" ]; then
-            read -ep "Directory $dir already exists. It would be smarter to create a new directory. Use it nonetheless? [y/N] "
+            exit 11
+        elif [ -d "$dir_dws" ]; then
+            read -ep "Directory $dir_dws already exists. It would be smarter to create a new directory. Use it nonetheless? [y/N] "
             if echo "$REPLY" | xargs | head -c 1 | egrep -qi '^y'; then
                 echo "You're the boss!" 1>&2
                 break
             fi
         else
-            mkdir -p "$dir" && break
-            echo "Oops, problem creating that directory. Let's try this again." 1>&2
+            mkdir -p "$dir_dws" && break
+            echo "Oops, had a problem creating that directory. Let's try this again." 1>&2
         fi
     done
-    echo "$dir"
 }
 
 
 function have_dir_dws() {
-    dir_dws=$(
-        local dirs=$(mktemp)
-        trap "rm -f -- $dirs" EXIT
-        find $HOME -name "$name_here" 2>/dev/null | xargs -n 1 dirname >"$dirs" 2>/dev/null
-        local dir=""
-        case $(wc -l <"$dirs") in
-            0)
-                make_new_dir_dws "Hello! It seems you have never used a Dumb Work Space on this machine before."
-                ;;
-            1) 
-                cat "$dirs"
-                ;;
-            *)
-                echo "You have multiple Dumb Work Space directories?! I can see all these:" 1>&2
-                awk '{printf("%6d %s\n", NR, $0)} (NR >= 20){print "      ... and yet more!"; exit 0}' "$dirs" 1>&2
-                echo "I leave it to you to clean up that mess. Right now, I can use any one of these." 1>&2
-                while true; do
-                    read -ep "Input the number of the DWS directory I should use now, leave empty to create a new one: "
-                    local answer="$(echo $REPLY | xargs | awk '{print $1}')"
-                    if [ -z "$answer" ]; then
-                        make_new_dir_dws "So we add a directory to your mess? You're the boss!"
-                        break
-                    else
-                        awk -v "n=$answer" \
-                            '(n == NR){print; exit 0}
-                             END{printf("Come on, I got no path for *%s*. Try again.\n", n) >"/dev/stderr"; exit 1}' \
-                            "$dirs" && break
-                    fi
-                done
-                ;;
-        esac
-    )
+    dir_dws="$(find $HOME -name "$name_here" 2>/dev/null | head -n 1 | xargs -n 1 dirname 2>/dev/null)"
+    if [ -z "$dir_dws" ]; then
+        make_new_dir_dws "Hello! It seems you have never used a Dumb Work Space on this machine before."
+    fi
 }
 
 
