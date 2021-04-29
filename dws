@@ -136,8 +136,44 @@ function init() {
 }
 
 
+function die_list() {
+    cat 1>&2 <<USAGE
+Usage: $dws list [-n]
+       $dws list -h
+
+Description: list all files stored in your Dumb Work Space. Each file comes as
+a path-like entry, starting with the workstation name, followed by the space
+name, and then the file itself. As all files are stored locally, they can be
+stat'ed, looked up and otherwise manipulated. Any serious work, however, is
+best performed by cloning other workstations' spaces to your current, using
+command $dws clone.
+
+Options:
+
+    -n  Skip updating the parentship from the remote repository.
+    -h  Print out this help and exit.
+USAGE
+    exit $1
+}
+
+
+function update_parentship() {
+    Git checkout main 1>&2 && Git pull origin main 1>&2 || exit
+}
+
+
 function list() {
+    local skip_update=""
+    while getopts "hn" arg; do
+        case "$arg" in
+            n)  local skip_updates="yes" ;;
+            h)  die_list 0 ;;
+            *)  die_list 1 ;;
+        esac
+    done
+
     init
+    test -z "$skip_updates" && update_parentship
     list_files
 }
 
@@ -194,6 +230,15 @@ RENAME
 }
 
 
+function die_clone() {
+    cat 1>&2 <<USAGE
+Usage: $dws clone workstation/space [directory]
+       $dws
+USAGE
+    exit $1
+}
+
+
 function clone() {
     echo "Don't know how to clone!"
     exit 42
@@ -209,7 +254,7 @@ function remove() {
 function die_sync() {
     cat 1>&2 <<USAGE
 Usage: $dws sync [-e] [-m MESSAGE] [--] [nickname]
-       $dws -h
+       $dws sync -h
 
 Synchronizes the current space to the parentship. This is done by copying the
 files to the local repository, committing that to an ad hoc branch, then
@@ -224,7 +269,7 @@ Options:
 
     -e         Edits the message before completing the commit and sync.
     -m MESSAGE Specifies a message on the command line.
-    -h         Print out this help.
+    -h         Print out this help and exit.
     nickname   By default, a space's nickname is the name of the directory.
                You may, however, choose a different nickname if you prefer.
                If $dws is invoked without command, you may specify the nickname
@@ -312,7 +357,7 @@ LARGE
     local branch_sync="sync_$nickname"
 
     while true; do
-        Git checkout main 1>&2 && Git pull origin main 1>&2 || exit
+        update_parentship
         if Git branch | grep -qv "^$branch_sync$"; then
             Git checkout -b "$branch_sync" 1>&2 || exit
             trap "Git checkout --force main 1>&2 && Git branch --delete --force \"$branch_sync\" 1>&2" EXIT
@@ -373,8 +418,8 @@ function ship() {
 function die_generic() {
     cat 1>&2 <<USAGE
 Usage: $dws command [OPTIONS] ARGS
-       $dws -h
-       $dws -v
+       $dws -h --> Print out this help and exit.
+       $dws -v --> Print out version information and exit.
 
 Description: dws is the Dumb Work Space. You use it to carry your work across
 the various workstations you have to use. Do this by defining _spaces_ on each
