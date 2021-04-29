@@ -240,9 +240,98 @@ function remove() {
 }
 
 
+function die_sync() {
+    cat 1>&2 <<USAGE
+Usage: $0 sync [-e] [-m MESSAGE]
+       $0 -h
+
+Synchronizes the current work directory to the mothership. This is done by
+copying the files to the local repository, committing that to an ad hoc
+branch, then merging and pushing that on the mothership's main branch. By
+default, a boilerplate commit message is associated to the files. You can
+edit this commit message, or change it through the command line. In the
+latter two cases, the commit is completed and pushed even if the files of
+this work directory match exactly those at the mothership: if one insists
+on committing, $0 is not going to oppose.
+
+Options:
+
+    -e         Edits the message before completing the commit and sync.
+    -m MESSAGE Specifies a message on the command line.
+    -h         Print out this help.
+
+If both the -e and -m options are specified, the message provided is the
+one opened in the editor through Git.
+USAGE
+    exit $1
+}
+
+
 function sync() {
-    echo "Don't know how to sync!"
-    exit 42
+    if [ ! -f ".dws" ]; then
+        echo "This work directory is not identified for storage in the mothership. Run $0 add first."
+        exit 3
+    fi
+    local nickname="$(cat .dws)" || exit
+    local branch_sync="sync_$nickname"
+
+    local allow_empty_commit=""
+    local message_commit="Sync $nickname"
+    local do_edit=""
+    while getopts "hm:e" arg; do
+        case "$arg" in
+            e)  local do_edit="--edit"
+                local allow_empty_commit="--allow-empty"
+                ;;
+            m)  local message_commit="$OPTARG"
+                local allow_empty_commit="--allow-empty"
+                ;;
+            h)  die_sync 0 ;;
+            *)  die_sync 1 ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+
+    while true; do
+        Git checkout main 1>&2 && Git pull 1>&2 || exit
+        if git branch | grep -qv "^$branch_sync$"; then
+            Git checkout -b "$branch_sync" 1>&2 || exit
+            trap "Git checkout --force main 1>&2 && Git branch --delete --force \"$branch_sync\" 1>&2" EXIT
+            local dir_work="$dir_repo/$here/$nickname"
+            rm -rf "$dir_work" && cp -R . "$dir_work" || exit
+            local x=0
+            if [ -n "$(git status --short)" -o -n "$allow_empty_commit" ]; then
+                Git add --all 1>&2 && Git commit "--message=\"$message\"" $do_edit $allow_empty_commit 1>&2
+                local x=$?
+            else
+                echo "This work directory is already up to date at the mothership." 1>&2
+                break
+            fi
+            Git checkout --force main 1>&2
+            test $x != 0 && exit $x
+        fi
+
+        (
+            Git checkout -b to_push 1>&2 || exit
+            trap "Git checkout --force main && Git branch --delete --force to_push" EXIT
+            Git merge "$branch_sync" 1>&2 || exit
+            Git push --porcelain origin to_push:main 2>&1 \
+                | awk -F'\t' '!/^remote:/{print > "/dev/stderr"}
+                              ($1 == "!" && /to_push/ && /main/){exit 123}'
+        ) && break
+        local x=$?
+
+        if [ "$x" = "123" ]; then
+            cat 1>&2 <<UPLOAD
+The upload of the $nickname work directory failed. This may be because the
+mothership's main branch has been modified while preparing this update.
+I will wait a few seconds and try again.
+UPLOAD
+            sleep 5
+        else
+            exit "$x"
+        fi
+    done
 }
 
 
