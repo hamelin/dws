@@ -4,6 +4,13 @@ name_here="dws-here"
 file_beacon=".dws-beacon"
 
 
+function pause() {
+    local p="$1"
+    test -z "$p" && local p="... "
+    read -p "$p"
+}
+
+
 function make_new_dir_dws() {
     dir_dws="$HOME/.dws-home"
     while [ -d "$dir_dws" ]; do
@@ -128,74 +135,61 @@ function init() {
 }
 
 
-function add_or_sync() {
-    if [ -f "$file_beacon" ]; then
-        sync
-    else
-        add
-    fi
-}
-
-
 function list() {
     echo "Don't know how to list!"
     exit 42
 }
 
 
-function die_add() {
-    cat 1>&2 <<USAGE
-Usage: $0 add [nickname]
-       $0 -h
-
-Adds a work directory to the workspace under a chosen nickname. By default,
-the nickname corresponds to the directory's own name. $0 will help you choose
-a unique name. A work directory can be added only under a single nickname.
-
-After the work directory has been added to the workspace, it is synchronized
-for the first time.
-
-Options:
-
-    -h  Print out this help.
-USAGE
-    exit $1
+function is_nickname_used() {
+    list_files | awk -F/ -v "host=$here" -v "nickname=$1" '($1==host && $2==nickname){exit 0} END{exit 1}'
 }
 
 
-function add() {
+function choose_nickname() {
     if [ -f "$file_beacon" ]; then
-        echo "Directory already added as $(cat "$file_beacon") on this workstation."
-        exit 2
+        local nickname_from_beacon="$(cat "$file_beacon")"
+        if [ -n "$nickname" ]; then
+            cat 1>&2 <<NICKNAME
+You propose using space nickname [$nickname] (1), but this space has previously
+been synchronized under the nickname [$nickname_from_beacon] (2).
+NICKNAME
+            read -ep "Should I replace $nickname_from_beacon with $nickname? [yN] "
+            if echo "$REPLY" | xargs | egrep -qi '^y'; then
+                cat 1>&2 <<RENAME
+Ok, this space is now renamed $nickname. Remark that the parentship will still
+store the files sent there so far under nickname $nickname_from_beacon in
+addition to new ones. Use command $0 rm to get rid of those.
+RENAME
+            else
+                echo "No worries, we keep this space named $nickname_from_beacon." 1>&2
+                nickname="$nickname_from_beacon"
+            fi
+        else
+            nickname="$nickname_from_beacon"
+        fi
     fi
 
-    init
-
-    while getopts 'h' arg; do
-        case "$arg" in
-            h) die_add 0 ;;
-            *) die_add 1 ;;
-        esac
-    done
-    shift $((OPTIND - 1))
-
-    name_dir="$1"
-    test -z "$name_dir" && name_dir="$(basename "$(pwd)")"
+    test -z "$nickname" && nickname="$(basename "$(pwd)")"
     while true; do
-        if [ -z "$name_dir" ]; then
+        if [ -z "$nickname" ]; then
             echo "You can't use an empty string to nickname a work directory. Let's try again." 1>&2
-        elif echo "$name_dir" | egrep -qv '[a-zA-Z0-9_.][-a-zA-Z0-9_.]*'; then
-            echo "Nickname this work directory using only letters, numbers, dashes, underscores and periods. The nickname $name_dir does not work." 1>&2
-        elif is_name_dir_used "$name_dir"; then
-            echo "Work directory nickname $name_dir is already being used on this workstation. Let's try again." 1>&2
+        elif echo "$nickname" | egrep -qv '[a-zA-Z0-9_.][-a-zA-Z0-9_.]*'; then
+            echo "Nickname this work directory using only letters, numbers, dashes, underscores and periods. The nickname $nickname does not work." 1>&2
+        elif is_nickname_used "$nickname"; then
+            read -ep "Work directory nickname $nickname is already being used on this workstation. If you insist on using it for this work directory, you will overwrite the parentship's store. That content will still be present in the parentship's Git history, should you need again. Do we proceed? [yN] "
+            if echo "$REPLY" | xargs | egrep -qi '^y'; then
+                echo "As always, you're the boss!" 1>&2
+                break
+            fi
         else
-            echo "$name_dir" >"$file_beacon"
             break
         fi
         read -ep "Input nickname: "
-        name_dir="$(echo "$REPLY" | xargs)"
+        nickname="$(echo "$REPLY" | xargs)"
     done
-    sync
+
+    echo "$nickname" >"$file_beacon"
 }
 
 
@@ -213,7 +207,7 @@ function remove() {
 
 function die_sync() {
     cat 1>&2 <<USAGE
-Usage: $0 sync [-e] [-m MESSAGE]
+Usage: $0 sync [-e] [-m MESSAGE] [--] [nickname]
        $0 -h
 
 Synchronizes the current space to the parentship. This is done by copying the
@@ -230,6 +224,11 @@ Options:
     -e         Edits the message before completing the commit and sync.
     -m MESSAGE Specifies a message on the command line.
     -h         Print out this help.
+    nickname   By default, a space's nickname is the name of the directory.
+               You may, however, choose a different nickname if you prefer.
+               If $0 is invoked without command, you may specify the nickname
+               by separating it from other arguments with --. Remark that no
+               option can appear beyond the nickname or --.
 
 If both the -e and -m options are specified, the message provided is the
 one opened in the editor through Git.
@@ -239,13 +238,6 @@ USAGE
 
 
 function sync() {
-    if [ ! -f "$file_beacon" ]; then
-        echo "This work directory is not identified for storage in the mothership. Run $0 add first."
-        exit 3
-    fi
-    local nickname="$(cat "$file_beacon")" || exit
-    local branch_sync="sync_$nickname"
-
     local allow_empty_commit=""
     local message_commit="Sync $nickname"
     local do_edit=""
@@ -262,6 +254,14 @@ function sync() {
         esac
     done
     shift $((OPTIND - 1))
+    test "$1" = "--" && shift
+    nickname="$1"
+
+    init
+
+    choose_nickname
+    local branch_sync="sync_$nickname"
+    pause
 
     while true; do
         Git checkout main 1>&2 && Git pull 1>&2 || exit
@@ -326,49 +326,44 @@ Usage: $0 command [OPTIONS] ARGS
 
 Description: dws is the Dumb Work Space. You use it to carry your work across
 the various workstations you have to use. Do this by defining _spaces_ on each
-workstation, which are directories recursively saved to the _mothership_. This
+workstation, which are directories recursively saved to the _parentship_. This
 is a Git repository that is kept in sync with the spaces on every workstation,
-possibly over Github.
+over any remote Git server you prefer.
 
 Commands:
 
-    list, ls     List the spaces, possibly on all workstations.
-    add          Add a new space.
+    sync         Synchronize the current space with the parentship.
+    list, ls     List all files present on the parentship.
     clone        Clone a space from another workstation.
-    remove, rm   Remove a local space.
-    sync         Synchronize the current space with the mothership.
+    remove, rm   Remove a local work directory.
     here         Report the name of this workstation as you set it up.
-    ship         Report the mothership directory, so you may fiddle with it
+    ship         Report the parentship directory, so you may fiddle with it
                  and re-arrange its synchronization at your convenience.
 
-Without any command, dws tries to sync if the current directory was previously
-added. Otherwise, it adds the current directory.
+Without any command, dws behaves as though sync was invoked.
 
-Requirement: having a remote Git repository (on Github, Gitlab, Sourcehut, or
-any SSH server you can access) that you can use as mothership.
+Requirement: having a remote Git repository (on Github, Gitlab, Bitbucket,
+Sourcehut, or any SSH server you care about) that you can use as parentship.
 USAGE
     exit $1
 }
 
 
 # What do we do?
-if [ -z "$1" ]; then
-    add_or_sync
-else
+if echo "$1" | egrep -q '^([a-z]|-[hv])' ; then
     cmd="$1"
     shift
     case "$cmd" in
-        ls)        list ;;
-        list)      list ;;
-        add)       add ;;
-        clone)     clone ;;
-        rm)        remove ;;
-        remove)    remove ;;
-        del)       remove ;;
-        delete)    remove ;;
-        sync)      sync ;;
-        here)      here ;;
-        ship)      ship ;;
+        ls)        list $@ ;;
+        list)      list $@ ;;
+        clone)     clone $@ ;;
+        rm)        remove $@ ;;
+        remove)    remove $@ ;;
+        del)       remove $@ ;;
+        delete)    remove $@ ;;
+        sync)      sync $@ ;;
+        here)      here $@ ;;
+        ship)      ship $@ ;;
         -h)        die_generic 0 ;;
         -v)        echo $VERSION ;;
         *)
@@ -376,4 +371,6 @@ else
             die_generic 1
             ;;
     esac
+else
+    sync $@
 fi
