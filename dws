@@ -342,8 +342,8 @@ function forget() {
         case "$arg" in
             e)  local do_edit="-e" ;;
             m)  local message_commit="$OPTARG" ;;
-            h)  die_sync 0 ;;
-            *)  die_sync 1 ;;
+            h)  die_forget 0 ;;
+            *)  die_forget 1 ;;
         esac
     done
     shift $((OPTIND - 1))
