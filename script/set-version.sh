@@ -19,15 +19,15 @@ version_new="$(echo "$REPLY" | xargs)"
 read -ep "New version will be $version_new. Are you sure? [yN] "
 echo "$REPLY" | xargs | grep -qvi '^y' && exit 1
 
-sed -ie "2s/^.*$/VERSION=\"$version_new\"/" dws || exit
-if ! git tag --sign --message="Release version $version_new" "$version_new" ; then
+sed -i -e "2s/^.*$/VERSION=\"$version_new\"/" dws || exit
+if ! (git add dws && git commit --message="Set version to $version_new" && git tag --sign --message="Release version $version_new" "$version_new") ; then
     x=$?
-    echo "Problem while adding the version tag, so version change is reverted." 1>&2
+    echo "*** Version change is reverted. ***" 1>&2
     git checkout dws
     exit $x
 fi
-if ! git push --tags; then
+if ! (git push && git push --tags) ; then
     x=$?
-    echo "There was a problem while pushing the tags to the origin remote, you may want to look into that. However, the version change *stays*." 1>&2
+    echo "*** Despite the failure to push the new changes and tags, the version change is committed. ***" 1>&2
     exit $x
 fi
