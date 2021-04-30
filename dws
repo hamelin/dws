@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="1.0-beta"
+VERSION="1.0.1"
 dws="$(basename "$0")"
 name_here="dws-here"
 file_beacon=".dws-beacon"
