@@ -20,10 +20,16 @@ read -ep "New version will be $version_new. Are you sure? [yN] "
 echo "$REPLY" | xargs | grep -qvi '^y' && exit 1
 
 sed -i -e "2s/^.*$/VERSION=\"$version_new\"/" dws || exit
-if ! (git add dws && git commit --message="Set version to $version_new" && git tag --sign --message="Release version $version_new" "$version_new") ; then
+if ! (git add dws && git commit --message="Set version to $version_new"); then
     x=$?
-    echo "*** Version change is reverted. ***" 1>&2
     git checkout dws
+    echo "*** Version change is reverted. ***" 1>&2
+    exit $x
+fi
+if ! git tag --sign --message="Release version $version_new" "$version_new" ; then
+    x=$?
+    git reset --hard HEAD^
+    echo "*** Version change commit has been reset. ***" 1>&2
     exit $x
 fi
 if ! (git push && git push --tags) ; then
